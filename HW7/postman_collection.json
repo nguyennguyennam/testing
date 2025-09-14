@@ -1,0 +1,182 @@
+{
+  "info": {
+    "_postman_id": "0cd6cc0f-0000-0000-0000-abcdefabcdef",
+    "name": "Products – 3 APIs (GET list only in CI)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Contains three endpoints; CI runs GET /products and validates PUT with real logic."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://api-with-bugs.practicesoftwaretesting.com",
+      "type": "string"
+    }, {
+      "key": "JWT_TOKEN",
+      "value": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2FwaS13aXRoLWJ1Z3MucHJhY3RpY2Vzb2Z0d2FyZXRlc3RpbmcuY29tL3VzZXJzL2xvZ2luIiwiaWF0IjoxNzU2MDg3NTUxLCJleHAiOjE3NzE2ODc1NTEsIm5iZiI6MTc1NjA4NzU1MSwianRpIjoiVDFJYzdVcFFQaUhKV24yZSIsInN1YiI6IjEiLCJwcnYiOiIyM2JkNWM4OTQ5ZjYwMGFkYjM5ZTcwMWM0MDA4NzJkYjdhNTk3NmY3Iiwicm9sZSI6ImFkbWluIn0.fCHkTfWq02hd4eeD1WXO3KWAd6r3aiPg_Ny06M7k3y0",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Products – Search (GET)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/products/search?q={{query}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["products", "search"],
+          "query": [{ "key": "q", "value": "{{query}}" }]
+        },
+        "description": "Data-driven via dataset_search.csv (query=Gloves)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "let body; try { body = pm.response.json(); } catch (e) {}",
+              "pm.test('JSON body', () => pm.expect(body).to.exist);",
+              "const items = Array.isArray(body) ? body : (body.items || body.data || []);",
+              "pm.test('Items not empty', () => pm.expect(items.length).to.be.above(0));",
+              "const q = (pm.iterationData.get('query') || '').toLowerCase();",
+              "pm.test('Name contains query', () => {",
+              "  const ok = items.some(it => String(it.name || '').toLowerCase().includes(q));",
+              "  pm.expect(ok,'no item matches query').to.be.true;",
+              "});",
+              "pm.test('Response time <2s', () => pm.expect(pm.response.responseTime).to.be.below(2000));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Products – Update (PUT)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{JWT_TOKEN}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/products/{{productId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["products", "{{productId}}"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"{{name}}\",\n  \"description\": \"{{description}}\",\n  \"stock\": {{stock}},\n  \"price\": {{price}}\n}"
+        },
+        "description": "Data-driven via dataset_put.csv (without expectedStatus)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const status = pm.response.code;",
+              "",
+              "// Lấy dữ liệu từ dataset",
+              "const price = Number(pm.iterationData.get('price'));",
+              "const stock = Number(pm.iterationData.get('stock'));",
+              "const name = String(pm.iterationData.get('name') || '');",
+              "const description = String(pm.iterationData.get('description') || '');",
+              "",
+              "// Điều kiện hợp lệ",
+              "const isValid = price >= 0 && stock >= 0 && name.trim().length > 0 && description.trim().length > 0;",
+              "",
+              "// Nếu hợp lệ → phải trả 200",
+              "if (isValid) {",
+              "  pm.test('Valid data → must return 200', () => { pm.expect(status).to.eql(200); });",
+              "",
+              "  if (status === 200) {",
+              "    let b; try { b = pm.response.json(); } catch (e) {}",
+              "    pm.test('Body JSON exists (200)', () => pm.expect(b).to.exist);",
+              "    if (b) {",
+              "      pm.test('Name updated', () => pm.expect(String(b.name)).to.eql(name));",
+              "      pm.test('Description updated', () => pm.expect(String(b.description)).to.eql(description));",
+              "      pm.test('Stock updated', () => pm.expect(Number(b.stock)).to.eql(stock));",
+              "      pm.test('Price updated', () => pm.expect(Number(b.price)).to.eql(price));",
+              "    }",
+              "  }",
+              "} else {",
+              "  // Nếu không hợp lệ → không được trả 200",
+              "  pm.test('Invalid data → must NOT return 200', () => { pm.expect(status).not.eql(200); });",
+              "}",
+              "",
+              "pm.test('Response time <2s', () => pm.expect(pm.response.responseTime).to.be.below(2000));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Products – List (GET)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/products?page={{page}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["products"],
+          "query": [{ "key": "page", "value": "{{page}}" }]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "let body; try { body = pm.response.json(); } catch (e) {}",
+              "pm.test('JSON body', () => pm.expect(body).to.exist);",
+              "const items = Array.isArray(body) ? body : (body.items || body.data || []);",
+              "pm.test('Items not empty', () => pm.expect(items.length).to.be.above(0));",
+              "const id = pm.iterationData.get('expectId');",
+              "const name = (pm.iterationData.get('expectName') || '').toLowerCase();",
+              "const desc = (pm.iterationData.get('expectDescription') || '').toLowerCase();",
+              "const price = pm.iterationData.get('expectPrice');",
+              "const stock = pm.iterationData.get('expectStock');",
+              "let found = items.find(it => {",
+              "  const idOk = id ? Number(it.id) === Number(id) : true;",
+              "  const nameOk = name ? String(it.name || '').toLowerCase().includes(name) : true;",
+              "  return idOk && nameOk;",
+              "});",
+              "pm.test('Contains expected product by id/name', () => pm.expect(!!found,'not found').to.be.true);",
+              "if (found) {",
+              "  if (desc) pm.test('Description contains expected', () => pm.expect(String(found.description||'').toLowerCase()).to.include(desc));",
+              "  if (price !== '' && price !== undefined) pm.test('Price matches', () => pm.expect(Number(found.price)).to.eql(Number(price)));",
+              "  if (stock !== '' && stock !== undefined) pm.test('Stock matches', () => pm.expect(Number(found.stock)).to.eql(Number(stock)));",
+              "}",
+              "pm.test('Response time <2s', () => pm.expect(pm.response.responseTime).to.be.below(2000));"
+            ]
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const page = pm.iterationData.get('page');",
+              "if (!page) {",
+              "  let q = pm.request.url.query.toObject();",
+              "  delete q.page;",
+              "  pm.request.url.query.clear();",
+              "  Object.keys(q).forEach(k => pm.request.url.query.add({key:k, value:q[k]}));",
+              "}"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
